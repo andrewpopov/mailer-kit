@@ -1,6 +1,6 @@
 {
   "name": "@andrewpopov/mailer-kit",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "The single outbound-mail transport primitive: nodemailer over SMTP configured from env, with html + attachments, injectable logging, graceful-degradation send, and a test seam. Content/templates stay app-specific.",
   "author": "Andrew Popov",
   "license": "MIT",
@@ -17,7 +17,7 @@
     "verify:pack": "node scripts/verify-pack.mjs"
   },
   "dependencies": {
-    "nodemailer": "^6.9.0"
+    "nodemailer": "^9.0.3"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
