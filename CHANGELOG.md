@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Upgrade Nodemailer from `^6.9.0` to `^9.0.3`, removing known address-parser,
+  file/URL access, SMTP command-injection, and TLS-validation advisories while
+  preserving mailer-kit's transport API.
+
 ## 0.1.0
 
 Initial release. The single outbound-mail transport primitive, extracted as a

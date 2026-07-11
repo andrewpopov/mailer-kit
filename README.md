@@ -18,7 +18,7 @@ MAIL_FROM   (default: SMTP_USER)        visible From address
 ## Install
 
 ```
-npm install github:andrewpopov/mailer-kit#v0.1.0
+npm install github:andrewpopov/mailer-kit#v0.2.0
 ```
 
 ## Use
