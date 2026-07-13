@@ -4,6 +4,10 @@ export interface SmtpConfig {
     host: string;
     port: number;
     secure: boolean;
+    requireTLS: boolean;
+    connectionTimeout: number;
+    greetingTimeout: number;
+    socketTimeout: number;
     user: string;
     pass: string;
     from: string;
@@ -31,6 +35,10 @@ export interface MailerOptions {
     defaultHost?: string;
     /** SMTP port when `SMTP_PORT` is unset. Default `587`. */
     defaultPort?: number;
+    /** Permit plaintext STARTTLS fallback on non-implicit-TLS ports. Default false. */
+    allowInsecureStarttls?: boolean;
+    /** Bounds for SMTP connection, greeting, and socket phases. Default 10 seconds each. */
+    timeoutMs?: number;
     /** Called after a successful send, for the app's own logging. */
     onSent?: (info: {
         to: string;
@@ -44,6 +52,12 @@ export interface MailerOptions {
     }) => void;
     /** Transport factory — inject a fake in tests. Defaults to `nodemailer.createTransport`. */
     transportFactory?: (config: SmtpConfig) => Transporter;
+}
+export type MailerConfigurationErrorCode = 'host' | 'port' | 'from' | 'timeout';
+/** Thrown before a transport is created when explicit mail configuration is malformed. */
+export declare class MailerConfigurationError extends Error {
+    readonly code: MailerConfigurationErrorCode;
+    constructor(code: MailerConfigurationErrorCode, message: string);
 }
 /** Resolve SMTP config from an env bag, or null when `SMTP_USER`/`SMTP_PASS` are absent. */
 export declare function resolveSmtpConfig(options?: MailerOptions): SmtpConfig | null;

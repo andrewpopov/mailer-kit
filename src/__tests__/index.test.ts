@@ -4,6 +4,7 @@ import {
   isValidEmail,
   resolveSmtpConfig,
   createMailer,
+  MailerConfigurationError,
   type SmtpConfig,
   type SendMailInput,
 } from '../index';
@@ -50,6 +51,10 @@ describe('resolveSmtpConfig', () => {
       host: 'smtp.gmail.com',
       port: 587,
       secure: false,
+      requireTLS: true,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 10_000,
       user: 'me@example.com',
       pass: 'secret',
       from: 'me@example.com',
@@ -57,7 +62,9 @@ describe('resolveSmtpConfig', () => {
   });
 
   it('port 465 implies implicit TLS', () => {
-    expect(resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_PORT: '465' } })?.secure).toBe(true);
+    const config = resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_PORT: '465' } });
+    expect(config?.secure).toBe(true);
+    expect(config?.requireTLS).toBe(false);
   });
 
   it('honors env overrides and custom defaults', () => {
@@ -71,6 +78,22 @@ describe('resolveSmtpConfig', () => {
     // Default applies only when env is absent.
     const d = resolveSmtpConfig({ env: CONFIGURED, defaultHost: 'smtp.resend.com', defaultPort: 465 });
     expect(d).toMatchObject({ host: 'smtp.resend.com', port: 465, secure: true });
+  });
+
+  it.each(['0', '-1', '1.5', '99999', 'smtp'])('rejects malformed explicit SMTP_PORT=%s', (port) => {
+    expect(() => resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_PORT: port } })).toThrow(MailerConfigurationError);
+  });
+
+  it('rejects malformed host, From, defaults, and timeout rather than falling back silently', () => {
+    expect(() => resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_HOST: 'bad host' } })).toThrow(/SMTP_HOST/);
+    expect(() => resolveSmtpConfig({ env: { ...CONFIGURED, MAIL_FROM: 'not-an-email' } })).toThrow(/MAIL_FROM/);
+    expect(() => resolveSmtpConfig({ env: CONFIGURED, defaultPort: 0 })).toThrow(/defaultPort/);
+    expect(() => resolveSmtpConfig({ env: CONFIGURED, timeoutMs: 0 })).toThrow(/timeoutMs/);
+  });
+
+  it('requires STARTTLS by default and makes the insecure opt-out explicit', () => {
+    expect(resolveSmtpConfig({ env: CONFIGURED })?.requireTLS).toBe(true);
+    expect(resolveSmtpConfig({ env: CONFIGURED, allowInsecureStarttls: true })?.requireTLS).toBe(false);
   });
 });
 
