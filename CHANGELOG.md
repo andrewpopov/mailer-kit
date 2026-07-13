@@ -9,6 +9,7 @@
   `allowInsecureStarttls` compatibility opt-out.
 - Bound SMTP connection, greeting, and socket phases through `timeoutMs`.
 - Add the documented local `npm run verify` release gate.
+- Upgrade the Vitest development toolchain to a version with no known advisories.
 
 ## 0.2.2
 
