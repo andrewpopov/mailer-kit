@@ -2,6 +2,7 @@
 
 ## 0.3.0
 
+- Add public contribution, support, and private vulnerability-reporting policies.
 - Validate explicit SMTP ports, hosts, From addresses, fallback ports, and
   timeout values before creating a transporter. Invalid explicit values no
   longer silently fall back to defaults.
