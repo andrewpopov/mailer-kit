@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.MailerConfigurationError = void 0;
 exports.isValidEmail = isValidEmail;
 exports.resolveSmtpConfig = resolveSmtpConfig;
 exports.createMailer = createMailer;
@@ -29,6 +30,34 @@ function isValidEmail(value) {
         return false;
     return EMAIL_PATTERN.test(value.trim());
 }
+/** Thrown before a transport is created when explicit mail configuration is malformed. */
+class MailerConfigurationError extends Error {
+    constructor(code, message) {
+        super(message);
+        this.code = code;
+        this.name = 'MailerConfigurationError';
+    }
+}
+exports.MailerConfigurationError = MailerConfigurationError;
+function parsePort(value, fallback) {
+    if (value === undefined || value.trim() === '')
+        return fallback;
+    if (!/^\d+$/.test(value.trim())) {
+        throw new MailerConfigurationError('port', 'SMTP_PORT must be an integer between 1 and 65535');
+    }
+    const port = Number(value);
+    if (!Number.isSafeInteger(port) || port < 1 || port > 65535) {
+        throw new MailerConfigurationError('port', 'SMTP_PORT must be an integer between 1 and 65535');
+    }
+    return port;
+}
+function validateTimeout(value) {
+    const timeout = value ?? 10000;
+    if (!Number.isSafeInteger(timeout) || timeout < 1) {
+        throw new MailerConfigurationError('timeout', 'timeoutMs must be a positive integer');
+    }
+    return timeout;
+}
 /** Resolve SMTP config from an env bag, or null when `SMTP_USER`/`SMTP_PASS` are absent. */
 function resolveSmtpConfig(options = {}) {
     const env = options.env ?? process.env;
@@ -37,10 +66,32 @@ function resolveSmtpConfig(options = {}) {
     if (!user || !pass)
         return null;
     const host = env.SMTP_HOST?.trim() || options.defaultHost || 'smtp.gmail.com';
-    const port = Number(env.SMTP_PORT) || options.defaultPort || 587;
+    if (!host || /\s/.test(host)) {
+        throw new MailerConfigurationError('host', 'SMTP_HOST must be a non-empty hostname without whitespace');
+    }
+    const fallbackPort = options.defaultPort ?? 587;
+    if (!Number.isSafeInteger(fallbackPort) || fallbackPort < 1 || fallbackPort > 65535) {
+        throw new MailerConfigurationError('port', 'defaultPort must be an integer between 1 and 65535');
+    }
+    const port = parsePort(env.SMTP_PORT, fallbackPort);
     const secure = port === 465; // 465 = implicit TLS; otherwise STARTTLS
     const from = env.MAIL_FROM?.trim() || user;
-    return { host, port, secure, user, pass, from };
+    if (!isValidEmail(from)) {
+        throw new MailerConfigurationError('from', 'MAIL_FROM must be a valid email address');
+    }
+    const timeout = validateTimeout(options.timeoutMs);
+    return {
+        host,
+        port,
+        secure,
+        requireTLS: !secure && !options.allowInsecureStarttls,
+        connectionTimeout: timeout,
+        greetingTimeout: timeout,
+        socketTimeout: timeout,
+        user,
+        pass,
+        from,
+    };
 }
 /** Create a mailer bound to the given options. Config is read lazily and cached. */
 function createMailer(options = {}) {
@@ -53,6 +104,10 @@ function createMailer(options = {}) {
                     host: c.host,
                     port: c.port,
                     secure: c.secure,
+                    requireTLS: c.requireTLS,
+                    connectionTimeout: c.connectionTimeout,
+                    greetingTimeout: c.greetingTimeout,
+                    socketTimeout: c.socketTimeout,
                     auth: { user: c.user, pass: c.pass },
                 }));
             cached = factory(config);

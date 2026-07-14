@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+- Add public contribution, support, and private vulnerability-reporting policies.
+- Validate explicit SMTP ports, hosts, From addresses, fallback ports, and
+  timeout values before creating a transporter. Invalid explicit values no
+  longer silently fall back to defaults.
+- Require STARTTLS on non-implicit-TLS SMTP by default, with an explicit
+  `allowInsecureStarttls` compatibility opt-out.
+- Bound SMTP connection, greeting, and socket phases through `timeoutMs`.
+- Add the documented local `npm run verify` release gate.
+- Upgrade the Vitest development toolchain to a version with no known advisories.
+
 ## 0.2.2
 
 Fix — expose `./package.json` in the `exports` map. Without it,
