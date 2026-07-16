@@ -7,18 +7,21 @@ content and templates stay app-specific.
 
 nodemailer over SMTP, configured from the environment:
 
-```
-SMTP_HOST   (default: smtp.gmail.com)   any SMTP relay
-SMTP_PORT   (default: 587)              strict integer 1–65535; 465 ⇒ implicit TLS, otherwise STARTTLS is required
-SMTP_USER   (required)                  absent ⇒ "not configured"
-SMTP_PASS   (required)
-MAIL_FROM   (default: SMTP_USER)        visible From address
-```
+| Env var | Required? | Default | Description |
+|---|---|---|---|
+| `SMTP_HOST` | Yes (via env or `defaultHost`) | *none* | Any SMTP relay hostname. No implicit default — an explicit host is required, or `resolveSmtpConfig`/`createMailer` throw a `MailerConfigurationError`. |
+| `SMTP_PORT` | No | `587` (or `defaultPort`) | Strict integer 1–65535; `465` ⇒ implicit TLS, otherwise STARTTLS is required. |
+| `SMTP_USER` | Yes | *none* | Absent (with `SMTP_PASS`) ⇒ mailer reports "not configured" rather than throwing. |
+| `SMTP_PASS` | Yes | *none* | See `SMTP_USER`. |
+| `MAIL_FROM` | No | `SMTP_USER` | Visible From address; must be a valid email address. |
+
+The env var names above are the defaults — remap them per consumer via
+`envKeys` (see [Remapping env var names](#remapping-env-var-names) below).
 
 ## Install
 
 ```
-npm install github:andrewpopov/mailer-kit#v0.3.0
+npm install github:andrewpopov/mailer-kit#v0.4.0
 ```
 
 ## Use
@@ -27,7 +30,7 @@ npm install github:andrewpopov/mailer-kit#v0.3.0
 import { createMailer, isValidEmail } from '@andrewpopov/mailer-kit';
 
 const mailer = createMailer({
-  defaultHost: 'smtp.resend.com',   // e.g. sano-os; omit for gmail
+  defaultHost: 'smtp.resend.com',   // required — no implicit default; set here or via SMTP_HOST
   defaultPort: 465,
   timeoutMs: 10_000,
   onSent: ({ to, subject }) => logger.info('email sent', { to, subject }),
@@ -63,7 +66,23 @@ export { isValidEmail } from '@andrewpopov/mailer-kit';
 | `isValidEmail(value)` | Pragmatic address shape check. |
 
 `SendMailInput`: `{ to, subject, text, html?, attachments? }`.
-`MailerOptions`: `env`, `defaultHost`, `defaultPort`, `timeoutMs`, `allowInsecureStarttls`, `onSent`, `onSkipped`, `transportFactory`.
+`MailerOptions`: `env`, `envKeys`, `defaultHost`, `defaultPort`, `timeoutMs`, `allowInsecureStarttls`, `onSent`, `onSkipped`, `transportFactory`.
+
+### Remapping env var names
+
+Consumers whose environment already uses different variable names can remap
+what mailer-kit reads via `envKeys`, without renaming their own env vars.
+Unmapped keys keep reading the standard name (fully backward compatible):
+
+```ts
+const mailer = createMailer({
+  envKeys: {
+    host: 'MAIL_HOST',   // read MAIL_HOST instead of SMTP_HOST
+    user: 'MAIL_USER',   // read MAIL_USER instead of SMTP_USER
+    // port/pass/from still read SMTP_PORT/SMTP_PASS/MAIL_FROM
+  },
+});
+```
 
 Malformed explicit ports, hosts, From addresses, defaults, and timeouts throw a
 `MailerConfigurationError` before a transport is created. SMTP connection,

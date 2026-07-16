@@ -28,10 +28,26 @@ export interface SendMailInput {
 export interface SendMailResult {
     sent: boolean;
 }
+/**
+ * Remap the env var names read for SMTP config, for apps whose environment
+ * already uses different names. Unset keys fall back to the standard names.
+ */
+export interface MailerEnvKeys {
+    host?: string;
+    port?: string;
+    user?: string;
+    pass?: string;
+    from?: string;
+}
 export interface MailerOptions {
     /** Config source. Defaults to `process.env`. */
     env?: Record<string, string | undefined>;
-    /** SMTP host when `SMTP_HOST` is unset. Default `smtp.gmail.com`. */
+    /**
+     * Remap the env var names read for SMTP config (e.g. `{ host: 'MAIL_HOST' }`).
+     * Defaults to `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`MAIL_FROM`.
+     */
+    envKeys?: MailerEnvKeys;
+    /** SMTP host when the host env var is unset. No default — an explicit host is required. */
     defaultHost?: string;
     /** SMTP port when `SMTP_PORT` is unset. Default `587`. */
     defaultPort?: number;
@@ -59,7 +75,12 @@ export declare class MailerConfigurationError extends Error {
     readonly code: MailerConfigurationErrorCode;
     constructor(code: MailerConfigurationErrorCode, message: string);
 }
-/** Resolve SMTP config from an env bag, or null when `SMTP_USER`/`SMTP_PASS` are absent. */
+/**
+ * Resolve SMTP config from an env bag, or null when the user/pass env vars are
+ * absent. Throws `MailerConfigurationError` for malformed or missing-but-required
+ * explicit values (host, port, from, timeout) — see `MailerOptions.envKeys` to
+ * remap the env var names read below.
+ */
 export declare function resolveSmtpConfig(options?: MailerOptions): SmtpConfig | null;
 export interface Mailer {
     /** Whether outbound email is configured (`SMTP_USER` + `SMTP_PASS` present). */

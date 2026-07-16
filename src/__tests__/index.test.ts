@@ -9,7 +9,9 @@ import {
   type SendMailInput,
 } from '../index';
 
-const CONFIGURED = { SMTP_USER: 'me@example.com', SMTP_PASS: 'secret' };
+const CONFIGURED = { SMTP_USER: 'me@example.com', SMTP_PASS: 'secret', SMTP_HOST: 'smtp.example.com' };
+// user/pass only — no host — for tests exercising the "host is required" behavior.
+const NO_HOST = { SMTP_USER: 'me@example.com', SMTP_PASS: 'secret' };
 
 // A fake transporter that records the payloads passed to sendMail.
 function fakeTransport() {
@@ -45,10 +47,15 @@ describe('resolveSmtpConfig', () => {
     expect(resolveSmtpConfig({ env: { SMTP_USER: 'x' } })).toBeNull();
   });
 
-  it('resolves defaults (gmail:587, STARTTLS, from=user)', () => {
+  it('requires an explicit host — no implicit gmail default', () => {
+    expect(() => resolveSmtpConfig({ env: NO_HOST })).toThrow(MailerConfigurationError);
+    expect(() => resolveSmtpConfig({ env: NO_HOST })).toThrow(/SMTP_HOST/);
+  });
+
+  it('resolves defaults (587, STARTTLS, from=user) given an explicit host', () => {
     const c = resolveSmtpConfig({ env: CONFIGURED });
     expect(c).toEqual({
-      host: 'smtp.gmail.com',
+      host: 'smtp.example.com',
       port: 587,
       secure: false,
       requireTLS: true,
@@ -59,6 +66,11 @@ describe('resolveSmtpConfig', () => {
       pass: 'secret',
       from: 'me@example.com',
     });
+  });
+
+  it('accepts an explicit host via defaultHost when the env var is unset', () => {
+    const c = resolveSmtpConfig({ env: NO_HOST, defaultHost: 'smtp.resend.com' });
+    expect(c?.host).toBe('smtp.resend.com');
   });
 
   it('port 465 implies implicit TLS', () => {
@@ -76,24 +88,69 @@ describe('resolveSmtpConfig', () => {
     expect(c?.host).toBe('smtp.brevo.com'); // env wins over default
     expect(c?.from).toBe('noreply@app.com');
     // Default applies only when env is absent.
-    const d = resolveSmtpConfig({ env: CONFIGURED, defaultHost: 'smtp.resend.com', defaultPort: 465 });
+    const d = resolveSmtpConfig({ env: NO_HOST, defaultHost: 'smtp.resend.com', defaultPort: 465 });
     expect(d).toMatchObject({ host: 'smtp.resend.com', port: 465, secure: true });
   });
 
   it.each(['0', '-1', '1.5', '99999', 'smtp'])('rejects malformed explicit SMTP_PORT=%s', (port) => {
-    expect(() => resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_PORT: port } })).toThrow(MailerConfigurationError);
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_HOST: 'smtp.example.com', SMTP_PORT: port } }),
+    ).toThrow(MailerConfigurationError);
   });
 
   it('rejects malformed host, From, defaults, and timeout rather than falling back silently', () => {
     expect(() => resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_HOST: 'bad host' } })).toThrow(/SMTP_HOST/);
-    expect(() => resolveSmtpConfig({ env: { ...CONFIGURED, MAIL_FROM: 'not-an-email' } })).toThrow(/MAIL_FROM/);
-    expect(() => resolveSmtpConfig({ env: CONFIGURED, defaultPort: 0 })).toThrow(/defaultPort/);
-    expect(() => resolveSmtpConfig({ env: CONFIGURED, timeoutMs: 0 })).toThrow(/timeoutMs/);
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_HOST: 'smtp.example.com', MAIL_FROM: 'not-an-email' } }),
+    ).toThrow(/MAIL_FROM/);
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_HOST: 'smtp.example.com' }, defaultPort: 0 }),
+    ).toThrow(/defaultPort/);
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, SMTP_HOST: 'smtp.example.com' }, timeoutMs: 0 }),
+    ).toThrow(/timeoutMs/);
   });
 
   it('requires STARTTLS by default and makes the insecure opt-out explicit', () => {
-    expect(resolveSmtpConfig({ env: CONFIGURED })?.requireTLS).toBe(true);
-    expect(resolveSmtpConfig({ env: CONFIGURED, allowInsecureStarttls: true })?.requireTLS).toBe(false);
+    const env = { ...CONFIGURED, SMTP_HOST: 'smtp.example.com' };
+    expect(resolveSmtpConfig({ env })?.requireTLS).toBe(true);
+    expect(resolveSmtpConfig({ env, allowInsecureStarttls: true })?.requireTLS).toBe(false);
+  });
+
+  it('remaps env var names via envKeys, defaulting unmapped keys to the standard names', () => {
+    const env = {
+      MY_HOST: 'smtp.example.com',
+      MY_USER: 'me@example.com',
+      MY_PASS: 'secret',
+    };
+    const c = resolveSmtpConfig({ env, envKeys: { host: 'MY_HOST', user: 'MY_USER', pass: 'MY_PASS' } });
+    expect(c).toMatchObject({ host: 'smtp.example.com', user: 'me@example.com', pass: 'secret', from: 'me@example.com' });
+  });
+
+  it('remapped port/from keys are honored and errors reference the remapped name', () => {
+    const env = { ...CONFIGURED, SMTP_HOST: 'smtp.example.com', MY_PORT: 'not-a-number' };
+    expect(() => resolveSmtpConfig({ env, envKeys: { port: 'MY_PORT' } })).toThrow(/MY_PORT/);
+  });
+
+  it('attributes a malformed host to its actual source: remapped env key or defaultHost', () => {
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, MY_HOST: 'bad host' }, envKeys: { host: 'MY_HOST' } }),
+    ).toThrow(/MY_HOST/);
+    expect(() => resolveSmtpConfig({ env: NO_HOST, defaultHost: 'bad host' })).toThrow(/defaultHost/);
+  });
+
+  it('errors for a missing remapped host and malformed remapped from name the remapped keys', () => {
+    expect(() => resolveSmtpConfig({ env: CONFIGURED, envKeys: { host: 'MY_HOST' } })).toThrow(/MY_HOST/);
+    expect(() =>
+      resolveSmtpConfig({
+        env: { ...CONFIGURED, SMTP_HOST: 'smtp.example.com', MY_FROM: 'not-an-email' },
+        envKeys: { from: 'MY_FROM' },
+      }),
+    ).toThrow(/MY_FROM/);
+  });
+
+  it('is null when only the remapped user/pass keys are absent (standard names ignored once remapped)', () => {
+    expect(resolveSmtpConfig({ env: CONFIGURED, envKeys: { user: 'MY_USER', pass: 'MY_PASS' } })).toBeNull();
   });
 });
 

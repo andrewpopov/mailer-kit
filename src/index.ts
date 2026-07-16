@@ -10,9 +10,10 @@ import nodemailer, { type Transporter } from 'nodemailer';
  * a test seam. Email *content* (invite/reset templates) stays app-specific — this
  * owns only the transport.
  *
- * Env: SMTP_HOST (default `defaultHost`), SMTP_PORT (default `defaultPort`),
- * SMTP_USER + SMTP_PASS (required — absent ⇒ "not configured"), MAIL_FROM
- * (default SMTP_USER). Port 465 ⇒ implicit TLS; otherwise STARTTLS.
+ * Env: SMTP_HOST (required — via env or `defaultHost`), SMTP_PORT (default
+ * `defaultPort`), SMTP_USER + SMTP_PASS (required — absent ⇒ "not configured"),
+ * MAIL_FROM (default SMTP_USER). Port 465 ⇒ implicit TLS; otherwise STARTTLS.
+ * Env key names are remappable via `envKeys` (see `MailerOptions`).
  */
 
 // Pragmatic shape check — not a full RFC validator, just enough to reject obvious
@@ -56,10 +57,35 @@ export interface SendMailResult {
   sent: boolean;
 }
 
+/**
+ * Remap the env var names read for SMTP config, for apps whose environment
+ * already uses different names. Unset keys fall back to the standard names.
+ */
+export interface MailerEnvKeys {
+  host?: string;
+  port?: string;
+  user?: string;
+  pass?: string;
+  from?: string;
+}
+
+const DEFAULT_ENV_KEYS: Required<MailerEnvKeys> = {
+  host: 'SMTP_HOST',
+  port: 'SMTP_PORT',
+  user: 'SMTP_USER',
+  pass: 'SMTP_PASS',
+  from: 'MAIL_FROM',
+};
+
 export interface MailerOptions {
   /** Config source. Defaults to `process.env`. */
   env?: Record<string, string | undefined>;
-  /** SMTP host when `SMTP_HOST` is unset. Default `smtp.gmail.com`. */
+  /**
+   * Remap the env var names read for SMTP config (e.g. `{ host: 'MAIL_HOST' }`).
+   * Defaults to `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`MAIL_FROM`.
+   */
+  envKeys?: MailerEnvKeys;
+  /** SMTP host when the host env var is unset. No default — an explicit host is required. */
   defaultHost?: string;
   /** SMTP port when `SMTP_PORT` is unset. Default `587`. */
   defaultPort?: number;
@@ -85,14 +111,14 @@ export class MailerConfigurationError extends Error {
   }
 }
 
-function parsePort(value: string | undefined, fallback: number): number {
+function parsePort(value: string | undefined, fallback: number, envKey = 'SMTP_PORT'): number {
   if (value === undefined || value.trim() === '') return fallback;
   if (!/^\d+$/.test(value.trim())) {
-    throw new MailerConfigurationError('port', 'SMTP_PORT must be an integer between 1 and 65535');
+    throw new MailerConfigurationError('port', `${envKey} must be an integer between 1 and 65535`);
   }
   const port = Number(value);
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535) {
-    throw new MailerConfigurationError('port', 'SMTP_PORT must be an integer between 1 and 65535');
+    throw new MailerConfigurationError('port', `${envKey} must be an integer between 1 and 65535`);
   }
   return port;
 }
@@ -105,26 +131,40 @@ function validateTimeout(value: number | undefined): number {
   return timeout;
 }
 
-/** Resolve SMTP config from an env bag, or null when `SMTP_USER`/`SMTP_PASS` are absent. */
+/**
+ * Resolve SMTP config from an env bag, or null when the user/pass env vars are
+ * absent. Throws `MailerConfigurationError` for malformed or missing-but-required
+ * explicit values (host, port, from, timeout) — see `MailerOptions.envKeys` to
+ * remap the env var names read below.
+ */
 export function resolveSmtpConfig(options: MailerOptions = {}): SmtpConfig | null {
   const env = options.env ?? process.env;
-  const user = env.SMTP_USER?.trim();
-  const pass = env.SMTP_PASS?.trim();
+  const keys = { ...DEFAULT_ENV_KEYS, ...options.envKeys };
+  const user = env[keys.user]?.trim();
+  const pass = env[keys.pass]?.trim();
   if (!user || !pass) return null;
 
-  const host = env.SMTP_HOST?.trim() || options.defaultHost || 'smtp.gmail.com';
-  if (!host || /\s/.test(host)) {
-    throw new MailerConfigurationError('host', 'SMTP_HOST must be a non-empty hostname without whitespace');
+  const envHost = env[keys.host]?.trim();
+  const host = envHost || options.defaultHost;
+  if (!host) {
+    throw new MailerConfigurationError(
+      'host',
+      `SMTP host is required — set ${keys.host} (or pass defaultHost)`,
+    );
+  }
+  if (/\s/.test(host)) {
+    const source = envHost ? keys.host : 'defaultHost';
+    throw new MailerConfigurationError('host', `${source} must be a non-empty hostname without whitespace`);
   }
   const fallbackPort = options.defaultPort ?? 587;
   if (!Number.isSafeInteger(fallbackPort) || fallbackPort < 1 || fallbackPort > 65535) {
     throw new MailerConfigurationError('port', 'defaultPort must be an integer between 1 and 65535');
   }
-  const port = parsePort(env.SMTP_PORT, fallbackPort);
+  const port = parsePort(env[keys.port], fallbackPort, keys.port);
   const secure = port === 465; // 465 = implicit TLS; otherwise STARTTLS
-  const from = env.MAIL_FROM?.trim() || user;
+  const from = env[keys.from]?.trim() || user;
   if (!isValidEmail(from)) {
-    throw new MailerConfigurationError('from', 'MAIL_FROM must be a valid email address');
+    throw new MailerConfigurationError('from', `${keys.from} must be a valid email address`);
   }
   const timeout = validateTimeout(options.timeoutMs);
   return {
