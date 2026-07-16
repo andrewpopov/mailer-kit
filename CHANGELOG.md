@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+- **Breaking:** remove the implicit `smtp.gmail.com` default host. An SMTP host
+  must now be supplied explicitly, via `SMTP_HOST` (or the remapped host env
+  key) or `defaultHost` — otherwise `resolveSmtpConfig`/`createMailer` throw a
+  `MailerConfigurationError` naming the missing env key, instead of silently
+  routing mail through Gmail's relay.
+- Add `envKeys` to `MailerOptions`, letting consumers remap the SMTP env var
+  names (`host`/`port`/`user`/`pass`/`from`) read from the environment, for
+  apps whose environment already uses different names. Defaults to the
+  existing `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`MAIL_FROM` names,
+  so this is backward compatible for every existing consumer.
+
 ## 0.3.0
 
 - Add public contribution, support, and private vulnerability-reporting policies.
