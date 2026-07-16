@@ -136,7 +136,7 @@ describe('resolveSmtpConfig', () => {
     expect(() =>
       resolveSmtpConfig({ env: { ...CONFIGURED, MY_HOST: 'bad host' }, envKeys: { host: 'MY_HOST' } }),
     ).toThrow(/MY_HOST/);
-    expect(() => resolveSmtpConfig({ env: CONFIGURED, defaultHost: 'bad host' })).toThrow(/defaultHost/);
+    expect(() => resolveSmtpConfig({ env: NO_HOST, defaultHost: 'bad host' })).toThrow(/defaultHost/);
   });
 
   it('errors for a missing remapped host and malformed remapped from name the remapped keys', () => {

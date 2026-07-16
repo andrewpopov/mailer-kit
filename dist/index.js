@@ -79,12 +79,14 @@ function resolveSmtpConfig(options = {}) {
     const pass = env[keys.pass]?.trim();
     if (!user || !pass)
         return null;
-    const host = env[keys.host]?.trim() || options.defaultHost;
+    const envHost = env[keys.host]?.trim();
+    const host = envHost || options.defaultHost;
     if (!host) {
         throw new MailerConfigurationError('host', `SMTP host is required — set ${keys.host} (or pass defaultHost)`);
     }
     if (/\s/.test(host)) {
-        throw new MailerConfigurationError('host', `${keys.host} must be a non-empty hostname without whitespace`);
+        const source = envHost ? keys.host : 'defaultHost';
+        throw new MailerConfigurationError('host', `${source} must be a non-empty hostname without whitespace`);
     }
     const fallbackPort = options.defaultPort ?? 587;
     if (!Number.isSafeInteger(fallbackPort) || fallbackPort < 1 || fallbackPort > 65535) {
