@@ -132,6 +132,23 @@ describe('resolveSmtpConfig', () => {
     expect(() => resolveSmtpConfig({ env, envKeys: { port: 'MY_PORT' } })).toThrow(/MY_PORT/);
   });
 
+  it('attributes a malformed host to its actual source: remapped env key or defaultHost', () => {
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, MY_HOST: 'bad host' }, envKeys: { host: 'MY_HOST' } }),
+    ).toThrow(/MY_HOST/);
+    expect(() => resolveSmtpConfig({ env: CONFIGURED, defaultHost: 'bad host' })).toThrow(/defaultHost/);
+  });
+
+  it('errors for a missing remapped host and malformed remapped from name the remapped keys', () => {
+    expect(() => resolveSmtpConfig({ env: CONFIGURED, envKeys: { host: 'MY_HOST' } })).toThrow(/MY_HOST/);
+    expect(() =>
+      resolveSmtpConfig({
+        env: { ...CONFIGURED, SMTP_HOST: 'smtp.example.com', MY_FROM: 'not-an-email' },
+        envKeys: { from: 'MY_FROM' },
+      }),
+    ).toThrow(/MY_FROM/);
+  });
+
   it('is null when only the remapped user/pass keys are absent (standard names ignored once remapped)', () => {
     expect(resolveSmtpConfig({ env: CONFIGURED, envKeys: { user: 'MY_USER', pass: 'MY_PASS' } })).toBeNull();
   });
