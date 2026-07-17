@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- Fix: `MAIL_FROM` (and the resolved `from`) now accepts the RFC-5322
+  display-name form `Name <no-reply@example.com>` in addition to a bare
+  email, matching what nodemailer sends and what 0.2.1 accepted. The 0.3.0
+  From-address validation (see below) had unintentionally tightened this to
+  bare-email-only in 0.4.0, silently rejecting the display form and breaking
+  consumers relying on it — this restores support for it. The `SMTP_USER`
+  fallback (used when `MAIL_FROM` is unset) is unaffected and stays a strict
+  bare-email check, since it's a login rather than a display string.
+
 ## 0.4.0
 
 - **Breaking:** remove the implicit `smtp.gmail.com` default host. An SMTP host

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { Transporter } from 'nodemailer';
 import {
   isValidEmail,
+  isValidFromAddress,
   resolveSmtpConfig,
   createMailer,
   MailerConfigurationError,
@@ -38,6 +39,26 @@ describe('isValidEmail', () => {
     [undefined, false],
   ])('%s -> %s', (value, ok) => {
     expect(isValidEmail(value as string)).toBe(ok);
+  });
+});
+
+describe('isValidFromAddress', () => {
+  it.each([
+    ['a@b.co', true],
+    ['Name <a@b.co>', true],
+    ['No-Reply Team <no-reply@example.com>', true],
+    ['  Name <a@b.co>  ', true],
+    ['<a@b.co>', false], // empty display name
+    ['Name <a@b.co', false], // missing closing bracket
+    ['Name a@b.co>', false], // missing opening bracket
+    ['Name <not-an-email>', false], // invalid inner email
+    ['Name <<a@b.co>>', false], // nested brackets
+    ['Name <a <b@c.co>>', false], // nested brackets
+    ['', false],
+    [null, false],
+    [undefined, false],
+  ])('%s -> %s', (value, ok) => {
+    expect(isValidFromAddress(value as string)).toBe(ok);
   });
 });
 
@@ -90,6 +111,57 @@ describe('resolveSmtpConfig', () => {
     // Default applies only when env is absent.
     const d = resolveSmtpConfig({ env: NO_HOST, defaultHost: 'smtp.resend.com', defaultPort: 465 });
     expect(d).toMatchObject({ host: 'smtp.resend.com', port: 465, secure: true });
+  });
+
+  it('accepts a display-name MAIL_FROM (RFC-5322 form)', () => {
+    const c = resolveSmtpConfig({
+      env: { ...CONFIGURED, MAIL_FROM: 'No-Reply <no-reply@example.com>' },
+    });
+    expect(c?.from).toBe('No-Reply <no-reply@example.com>');
+  });
+
+  it('rejects a display-name MAIL_FROM with an empty display name', () => {
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, MAIL_FROM: '<no-reply@example.com>' } }),
+    ).toThrow(/MAIL_FROM/);
+  });
+
+  it('rejects a display-name MAIL_FROM with a missing closing bracket', () => {
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, MAIL_FROM: 'No-Reply <no-reply@example.com' } }),
+    ).toThrow(/MAIL_FROM/);
+  });
+
+  it('rejects a display-name MAIL_FROM with an invalid inner email', () => {
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, MAIL_FROM: 'No-Reply <not-an-email>' } }),
+    ).toThrow(/MAIL_FROM/);
+  });
+
+  it('rejects a display-name MAIL_FROM with nested angle brackets', () => {
+    expect(() =>
+      resolveSmtpConfig({ env: { ...CONFIGURED, MAIL_FROM: 'No-Reply <<no-reply@example.com>>' } }),
+    ).toThrow(/MAIL_FROM/);
+  });
+
+  it('rejects CR/LF header-injection attempts in the display name (and anywhere in the value)', () => {
+    expect(() =>
+      resolveSmtpConfig({
+        env: { ...CONFIGURED, MAIL_FROM: 'Name\r\nBcc: victim@example.com <no-reply@example.com>' },
+      }),
+    ).toThrow(/MAIL_FROM/);
+    expect(() =>
+      resolveSmtpConfig({
+        env: { ...CONFIGURED, MAIL_FROM: 'Name\nX <no-reply@example.com>' },
+      }),
+    ).toThrow(/MAIL_FROM/);
+  });
+
+  it('keeps the SMTP_USER from-fallback strict (bare email only, no display form)', () => {
+    // MAIL_FROM absent: from falls back to SMTP_USER, which is a login and must
+    // stay a bare address — this path does not accept the display-name form.
+    const c = resolveSmtpConfig({ env: CONFIGURED });
+    expect(c?.from).toBe('me@example.com');
   });
 
   it.each(['0', '-1', '1.5', '99999', 'smtp'])('rejects malformed explicit SMTP_PORT=%s', (port) => {
@@ -182,6 +254,16 @@ describe('createMailer.sendMail', () => {
     });
     expect((t.sent[0].attachments as unknown[])).toHaveLength(1);
     expect(onSent).toHaveBeenCalledWith({ to: 'you@example.com', subject: 'Hi', attachments: 1 });
+  });
+
+  it('delivers a display-name From unmangled to nodemailer', async () => {
+    const t = fakeTransport();
+    const mailer = createMailer({
+      env: { ...CONFIGURED, MAIL_FROM: 'No-Reply <no-reply@example.com>' },
+      transportFactory: t.factory,
+    });
+    await mailer.sendMail(input);
+    expect(t.sent[0]).toMatchObject({ from: 'No-Reply <no-reply@example.com>' });
   });
 
   it('omits html/attachments keys when not provided', async () => {

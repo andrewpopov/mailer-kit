@@ -1,5 +1,13 @@
 import { type Transporter } from 'nodemailer';
 export declare function isValidEmail(value: string | null | undefined): boolean;
+/**
+ * Validate a `from`/`MAIL_FROM` value: either a bare email (`isValidEmail`) or
+ * the display-name form `Name <bare-email>` that nodemailer accepts and that
+ * 0.2.1 supported. Used everywhere a from-header value is validated; NOT used
+ * for the SMTP-login fallback (`from` defaulting to `SMTP_USER`), which stays
+ * a bare-email check since a login is not a display string.
+ */
+export declare function isValidFromAddress(value: string | null | undefined): boolean;
 export interface SmtpConfig {
     host: string;
     port: number;

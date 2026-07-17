@@ -13,7 +13,7 @@ nodemailer over SMTP, configured from the environment:
 | `SMTP_PORT` | No | `587` (or `defaultPort`) | Strict integer 1–65535; `465` ⇒ implicit TLS, otherwise STARTTLS is required. |
 | `SMTP_USER` | Yes | *none* | Absent (with `SMTP_PASS`) ⇒ mailer reports "not configured" rather than throwing. |
 | `SMTP_PASS` | Yes | *none* | See `SMTP_USER`. |
-| `MAIL_FROM` | No | `SMTP_USER` | Visible From address; must be a valid email address. |
+| `MAIL_FROM` | No | `SMTP_USER` | Visible From address. Either a bare email (`no-reply@example.com`) or the display-name form `Name <no-reply@example.com>`. The `SMTP_USER` fallback (when unset) is always a bare email, since it's a login. |
 
 The env var names above are the defaults — remap them per consumer via
 `envKeys` (see [Remapping env var names](#remapping-env-var-names) below).
@@ -21,7 +21,7 @@ The env var names above are the defaults — remap them per consumer via
 ## Install
 
 ```
-npm install github:andrewpopov/mailer-kit#v0.4.0
+npm install github:andrewpopov/mailer-kit#v0.5.0
 ```
 
 ## Use
