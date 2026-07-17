@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MailerConfigurationError = void 0;
 exports.isValidEmail = isValidEmail;
+exports.isValidFromAddress = isValidFromAddress;
 exports.resolveSmtpConfig = resolveSmtpConfig;
 exports.createMailer = createMailer;
 const nodemailer_1 = __importDefault(require("nodemailer"));
@@ -30,6 +31,42 @@ function isValidEmail(value) {
     if (!value)
         return false;
     return EMAIL_PATTERN.test(value.trim());
+}
+// RFC-5322 "display name" form: `Name <bare-email>`. The bracketed part must
+// itself pass the bare-email check, the display name must be non-empty, and
+// brackets must be balanced/non-nested (no `<a <b>>`-style trickery).
+const DISPLAY_NAME_PATTERN = /^([^<>]*)<([^<>]+)>$/;
+/**
+ * Validate a `from`/`MAIL_FROM` value: either a bare email (`isValidEmail`) or
+ * the display-name form `Name <bare-email>` that nodemailer accepts and that
+ * 0.2.1 supported. Used everywhere a from-header value is validated; NOT used
+ * for the SMTP-login fallback (`from` defaulting to `SMTP_USER`), which stays
+ * a bare-email check since a login is not a display string.
+ */
+function isValidFromAddress(value) {
+    if (!value)
+        return false;
+    // Reject control characters everywhere — a CR/LF inside the display name is
+    // an SMTP header-injection vector ("Name\r\nBcc: ... <a@b.co>"), and no
+    // legitimate from value contains them.
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001f\u007f]/.test(value))
+        return false;
+    const trimmed = value.trim();
+    // Presence of angle brackets commits to the display-name form — a bare
+    // address never contains one, and this keeps a bracketed-but-malformed
+    // value (e.g. an empty display name) from being let through by the plain
+    // bare-email check below.
+    if (trimmed.includes('<') || trimmed.includes('>')) {
+        const match = DISPLAY_NAME_PATTERN.exec(trimmed);
+        if (!match)
+            return false;
+        const [, displayName, innerEmail] = match;
+        if (displayName.trim() === '')
+            return false;
+        return isValidEmail(innerEmail.trim());
+    }
+    return isValidEmail(trimmed);
 }
 const DEFAULT_ENV_KEYS = {
     host: 'SMTP_HOST',
@@ -94,8 +131,17 @@ function resolveSmtpConfig(options = {}) {
     }
     const port = parsePort(env[keys.port], fallbackPort, keys.port);
     const secure = port === 465; // 465 = implicit TLS; otherwise STARTTLS
-    const from = env[keys.from]?.trim() || user;
-    if (!isValidEmail(from)) {
+    const envFrom = env[keys.from]?.trim();
+    const from = envFrom || user;
+    if (envFrom) {
+        // Explicit MAIL_FROM: accept a bare email or the display-name form
+        // `Name <email>` (nodemailer supports it; 0.2.1 accepted it).
+        if (!isValidFromAddress(from)) {
+            throw new MailerConfigurationError('from', `${keys.from} must be a valid email address, or "Display Name <email@example.com>"`);
+        }
+    }
+    else if (!isValidEmail(from)) {
+        // Fallback to SMTP_USER (a login), which must be a bare email.
         throw new MailerConfigurationError('from', `${keys.from} must be a valid email address`);
     }
     const timeout = validateTimeout(options.timeoutMs);
