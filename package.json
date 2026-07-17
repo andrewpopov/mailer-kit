@@ -4,9 +4,17 @@
   "description": "The single outbound-mail transport primitive: nodemailer over SMTP configured from env, with html + attachments, injectable logging, graceful-degradation send, and a test seam. Content/templates stay app-specific.",
   "author": "Andrew Popov",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/andrewpopov/mailer-kit.git" },
+  "repository": { "type": "git", "url": "git+https://github.com/andrewpopov/mailer-kit.git" },
   "bugs": { "url": "https://github.com/andrewpopov/mailer-kit/issues" },
   "homepage": "https://github.com/andrewpopov/mailer-kit#readme",
+  "keywords": [
+    "mailer",
+    "smtp",
+    "nodemailer",
+    "email",
+    "transport",
+    "typescript"
+  ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
