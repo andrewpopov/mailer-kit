@@ -37,12 +37,19 @@
     "test:watch": "vitest",
     "verify:pack": "node scripts/verify-pack.mjs",
     "verify:dist-fresh": "node scripts/verify-dist-fresh.mjs",
-    "verify": "npm run typecheck && npm test && npm run build && npm run verify:pack"
+    "verify": "npm run typecheck && npm test && npm run build && npm run verify:pack",
+    "release:note": "release-kit note",
+    "release:notes": "release-kit notes",
+    "release:bump": "release-kit bump",
+    "release:cut": "release-kit cut",
+    "release:check": "release-kit check",
+    "release:hygiene": "release-kit hygiene"
   },
   "dependencies": {
     "nodemailer": "^9.0.3"
   },
   "devDependencies": {
+    "@andrewpopov/release-kit": "github:andrewpopov/release-kit#v0.2.0",
     "@types/node": "^20.14.0",
     "@types/nodemailer": "^6.4.0",
     "typescript": "^5.5.0",
