@@ -54,7 +54,7 @@
     "nodemailer": "^9.0.3"
   },
   "devDependencies": {
-    "@andrewpopov/release-kit": "github:andrewpopov/release-kit#v0.2.0",
+    "@andrewpopov/release-kit": "github:andrewpopov/release-kit#v0.3.1",
     "@types/node": "^20.14.0",
     "@types/nodemailer": "^6.4.0",
     "typescript": "^5.5.0",
