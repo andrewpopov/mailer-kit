@@ -127,9 +127,11 @@ export interface MailerOptions {
   allowInsecureStarttls?: boolean;
   /** Bounds for SMTP connection, greeting, and socket phases. Default 10 seconds each. */
   timeoutMs?: number;
-  /** Called after a successful send, for the app's own logging. */
+  /** Called after a successful send, for the app's own logging. Observer
+   * failures are isolated and never change the delivery outcome. */
   onSent?: (info: { to: string; subject: string; attachments: number }) => void;
-  /** Called when a best-effort send is skipped because email is unconfigured. */
+  /** Called when a best-effort send is skipped because email is unconfigured.
+   * Observer failures are isolated and never change the skipped outcome. */
   onSkipped?: (info: { to: string; subject: string }) => void;
   /** Transport factory — inject a fake in tests. Defaults to `nodemailer.createTransport`. */
   transportFactory?: (config: SmtpConfig) => Transporter;
@@ -247,6 +249,15 @@ export interface Mailer {
 export function createMailer(options: MailerOptions = {}): Mailer {
   let cached: Transporter | null = null;
 
+  const notifyObserver = <Info>(observer: ((info: Info) => void) | undefined, info: Info): void => {
+    try {
+      observer?.(info);
+    } catch {
+      // Delivery state is authoritative. Logging/telemetry must never turn an
+      // accepted message into an apparent failure that callers may retry.
+    }
+  };
+
   const getSmtpConfig = (): SmtpConfig | null => resolveSmtpConfig(options);
 
   const getTransporter = (config: SmtpConfig): Transporter => {
@@ -286,7 +297,11 @@ export function createMailer(options: MailerOptions = {}): Mailer {
           }
         : {}),
     });
-    options.onSent?.({ to: input.to, subject: input.subject, attachments: input.attachments?.length ?? 0 });
+    notifyObserver(options.onSent, {
+      to: input.to,
+      subject: input.subject,
+      attachments: input.attachments?.length ?? 0,
+    });
   };
 
   return {
@@ -300,7 +315,7 @@ export function createMailer(options: MailerOptions = {}): Mailer {
     async sendMailBestEffort(input: SendMailInput): Promise<SendMailResult> {
       const config = getSmtpConfig();
       if (!config) {
-        options.onSkipped?.({ to: input.to, subject: input.subject });
+        notifyObserver(options.onSkipped, { to: input.to, subject: input.subject });
         return { sent: false };
       }
       await deliver(config, input);

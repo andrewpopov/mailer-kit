@@ -161,6 +161,15 @@ function resolveSmtpConfig(options = {}) {
 /** Create a mailer bound to the given options. Config is read lazily and cached. */
 function createMailer(options = {}) {
     let cached = null;
+    const notifyObserver = (observer, info) => {
+        try {
+            observer?.(info);
+        }
+        catch {
+            // Delivery state is authoritative. Logging/telemetry must never turn an
+            // accepted message into an apparent failure that callers may retry.
+        }
+    };
     const getSmtpConfig = () => resolveSmtpConfig(options);
     const getTransporter = (config) => {
         if (!cached) {
@@ -196,7 +205,11 @@ function createMailer(options = {}) {
                 }
                 : {}),
         });
-        options.onSent?.({ to: input.to, subject: input.subject, attachments: input.attachments?.length ?? 0 });
+        notifyObserver(options.onSent, {
+            to: input.to,
+            subject: input.subject,
+            attachments: input.attachments?.length ?? 0,
+        });
     };
     return {
         isEmailConfigured: () => getSmtpConfig() !== null,
@@ -210,7 +223,7 @@ function createMailer(options = {}) {
         async sendMailBestEffort(input) {
             const config = getSmtpConfig();
             if (!config) {
-                options.onSkipped?.({ to: input.to, subject: input.subject });
+                notifyObserver(options.onSkipped, { to: input.to, subject: input.subject });
                 return { sent: false };
             }
             await deliver(config, input);
