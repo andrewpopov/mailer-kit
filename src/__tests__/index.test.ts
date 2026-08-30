@@ -290,6 +290,20 @@ describe('createMailer.sendMail', () => {
     const mailer = createMailer({ env: CONFIGURED, transportFactory: factory });
     await expect(mailer.sendMail(input)).rejects.toThrow('relay down');
   });
+
+  it('does not report a successful delivery as failed when onSent throws', async () => {
+    const t = fakeTransport();
+    const mailer = createMailer({
+      env: CONFIGURED,
+      transportFactory: t.factory,
+      onSent: () => {
+        throw new Error('logger down');
+      },
+    });
+
+    await expect(mailer.sendMail(input)).resolves.toBeUndefined();
+    expect(t.sent).toHaveLength(1);
+  });
 });
 
 describe('createMailer.sendMailBestEffort (graceful degradation)', () => {
@@ -298,6 +312,17 @@ describe('createMailer.sendMailBestEffort (graceful degradation)', () => {
     const mailer = createMailer({ env: {}, onSkipped });
     await expect(mailer.sendMailBestEffort(input)).resolves.toEqual({ sent: false });
     expect(onSkipped).toHaveBeenCalledWith({ to: 'you@example.com', subject: 'Hi' });
+  });
+
+  it('still no-ops when the onSkipped observer throws', async () => {
+    const mailer = createMailer({
+      env: {},
+      onSkipped: () => {
+        throw new Error('logger down');
+      },
+    });
+
+    await expect(mailer.sendMailBestEffort(input)).resolves.toEqual({ sent: false });
   });
 
   it('sends with {sent:true} when configured', async () => {

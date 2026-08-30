@@ -63,13 +63,15 @@ export interface MailerOptions {
     allowInsecureStarttls?: boolean;
     /** Bounds for SMTP connection, greeting, and socket phases. Default 10 seconds each. */
     timeoutMs?: number;
-    /** Called after a successful send, for the app's own logging. */
+    /** Called after a successful send, for the app's own logging. Observer
+     * failures are isolated and never change the delivery outcome. */
     onSent?: (info: {
         to: string;
         subject: string;
         attachments: number;
     }) => void;
-    /** Called when a best-effort send is skipped because email is unconfigured. */
+    /** Called when a best-effort send is skipped because email is unconfigured.
+     * Observer failures are isolated and never change the skipped outcome. */
     onSkipped?: (info: {
         to: string;
         subject: string;

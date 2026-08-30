@@ -21,7 +21,7 @@ The env var names above are the defaults — remap them per consumer via
 ## Install
 
 ```
-npm install github:andrewpopov/mailer-kit#v0.5.0
+npm install github:andrewpopov/mailer-kit#v0.5.2
 ```
 
 ## Use
@@ -92,6 +92,9 @@ On non-implicit-TLS ports, STARTTLS is required by default; setting
 
 The package deliberately does not retry sends: SMTP retries can create duplicate
 messages. Put retries and idempotency keys in a durable application queue.
+`onSent` and `onSkipped` are observer hooks: failures inside either callback are
+isolated so logging cannot turn a successful delivery or intentional no-op into
+an apparent failure.
 
 ## Verify locally
 
